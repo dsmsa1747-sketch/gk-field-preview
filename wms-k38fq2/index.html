@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow, noarchive">
+<title>지케이 WMS 데모</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700&display=swap">
+<style>
+:root{
+  --bg:#f6f7f9; --surface:#ffffff; --fg:#1a1d24; --muted:#5c6370; --line:#dde2e9;
+  --primary:#2d4a7c; --on-primary:#ffffff; --bad:#a33131;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#14171d; --surface:#1c2027; --fg:#e7e9ed; --muted:#98a0ac; --line:#2c323c;
+  --primary:#88a9dd; --on-primary:#10141a; --bad:#e08a8a; color-scheme:dark;
+}}
+:root[data-theme="dark"]{
+  --bg:#14171d; --surface:#1c2027; --fg:#e7e9ed; --muted:#98a0ac; --line:#2c323c;
+  --primary:#88a9dd; --on-primary:#10141a; --bad:#e08a8a; color-scheme:dark;
+}
+*{box-sizing:border-box}
+html,body{margin:0;overflow-x:hidden}
+body{background:var(--bg);color:var(--fg);font-family:"Noto Sans KR",-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+  line-height:1.6;display:flex;align-items:center;justify-content:center;min-height:100vh;
+  padding:24px max(16px,env(safe-area-inset-left,0px))}
+.box{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:26px 22px;max-width:380px;width:100%}
+h1{font-size:1.2rem;margin:0 0 6px;font-weight:700;letter-spacing:-.01em}
+p.s{color:var(--muted);font-size:.86rem;margin:0 0 20px}
+label{display:block;font-size:.82rem;font-weight:500;margin-bottom:6px}
+input{width:100%;padding:12px 13px;border:1px solid var(--line);border-radius:9px;font-size:1rem;
+  background:var(--bg);color:var(--fg);font-family:inherit}
+button{width:100%;margin-top:12px;padding:12px;border:none;border-radius:9px;background:var(--primary);
+  color:var(--on-primary);font-weight:700;font-size:.95rem;font-family:inherit;cursor:pointer}
+button:disabled{opacity:.55;cursor:default}
+.err{color:var(--bad);font-size:.84rem;margin-top:10px;min-height:1.2em}
+.note{color:var(--muted);font-size:.78rem;margin-top:18px;line-height:1.55}
+</style>
+</head>
+<body>
+<div class="box">
+  <h1>지케이 WMS 데모</h1>
+  <p class="s">내부 검토용입니다. 전달받으신 암호를 넣어 주십시오.</p>
+  <label for="pw">암호</label>
+  <input id="pw" type="password" autocomplete="off" inputmode="text" placeholder="예: gk-····-····"
+         onkeydown="if(event.key==='Enter')go()">
+  <button id="btn" onclick="go()">열기</button>
+  <div class="err" id="err"></div>
+  <p class="note">내용이 암호로 잠겨 있어, 암호 없이는 화면도 금액도 열리지 않습니다.
+    암호는 카카오톡으로 따로 전달드린 것을 쓰십시오.</p>
+</div>
+<script>
+const $=id=>document.getElementById(id);
+function b64(s){const b=atob(s),a=new Uint8Array(b.length);for(let i=0;i<b.length;i++)a[i]=b.charCodeAt(i);return a;}
+async function go(){
+  const pw=$('pw').value.trim();
+  if(!pw){$('err').textContent='암호를 넣어 주십시오.';return;}
+  if(!(window.crypto&&crypto.subtle)){
+    $('err').textContent='이 브라우저에서는 열 수 없습니다. 크롬이나 사파리로 열어 주십시오.';return;
+  }
+  $('btn').disabled=true;$('btn').textContent='여는 중…';$('err').textContent='';
+  try{
+    const p=await (await fetch('payload.json',{cache:'no-store'})).json();
+    const base=await crypto.subtle.importKey('raw',new TextEncoder().encode(pw),'PBKDF2',false,['deriveKey']);
+    const key=await crypto.subtle.deriveKey(
+      {name:'PBKDF2',salt:b64(p.salt),iterations:p.iter,hash:'SHA-256'},
+      base,{name:'AES-GCM',length:256},false,['decrypt']);
+    const plain=await crypto.subtle.decrypt({name:'AES-GCM',iv:b64(p.iv)},key,b64(p.ct));
+    const html=new TextDecoder().decode(plain);
+    document.open();document.write(html);document.close();
+  }catch(e){
+    $('btn').disabled=false;$('btn').textContent='열기';
+    $('err').textContent='암호가 맞지 않습니다. 다시 넣어 주십시오.';
+  }
+}
+$('pw').focus();
+</script>
+</body>
+</html>
